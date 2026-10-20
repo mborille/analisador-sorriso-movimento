@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "Se você usar este software, cite-o como abaixo."
+title: "Analisador do Sorriso em Movimento: medidas do sorriso a partir de vídeo ou fotos, no navegador"
+type: software
+version: 0.1.0
+date-released: 2026-10-20
+doi: 10.6084/m9.figshare.34715979
+license: MIT
+repository-code: "https://github.com/mborille/analisador-sorriso-movimento"
+authors:
+  - family-names: Borille
+    given-names: Marcelo Barboza
+    orcid: "https://orcid.org/0009-0000-5422-207X"
+keywords:
+  - odontologia
+  - análise do sorriso
+  - estética dental
+  - vídeo
+  - MediaPipe
+  - open source software
+abstract: "Mede, no navegador e a partir de vídeo curto ou fotos, abertura interlabial, largura do sorriso, exposição dos dentes, corredor bucal, gengiva visível e arco do sorriso, usando a distância interpupilar como escala. Aplicativo HTML independente; nada é enviado a servidor. Ferramenta de estudo, não validada clinicamente."

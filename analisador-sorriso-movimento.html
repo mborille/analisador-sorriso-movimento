@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Analisador do Sorriso em Movimento</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: foto grande à esquerda, painel de medição à direita; empilha no celular.
+   Linguagem: Apple (tipografia do sistema, superfícies agrupadas, controles segmentados, azul do sistema). */
+:root {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --line: rgba(60, 60, 67, 0.16);
+  --fg: #1d1d1f;
+  --fg-dim: #6e6e73;
+  --accent: #0071e3;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(0, 113, 227, 0.1);
+  --seg-thumb: #ffffff;
+  --card-c: #8e8e93;
+  --tooth-c: #ff9f0a;
+  --ref-c: #30b0c7;
+  --ok: #248a3d;
+  --warn: #b25000;
+  --bad: #d70015;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 28px rgba(0, 0, 0, 0.06);
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font-data: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000; --surface: #1c1c1e; --surface-2: #2c2c2e; --line: rgba(84, 84, 88, 0.55);
+    --fg: #f5f5f7; --fg-dim: #98989d; --accent: #0a84ff; --accent-ink: #ffffff; --accent-soft: rgba(10, 132, 255, 0.2);
+    --seg-thumb: #636366; --card-c: #aeaeb2; --tooth-c: #ff9f0a; --ref-c: #64d2ff;
+    --ok: #30d158; --warn: #ff9f0a; --bad: #ff453a; --shadow: none;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #000000; --surface: #1c1c1e; --surface-2: #2c2c2e; --line: rgba(84, 84, 88, 0.55);
+  --fg: #f5f5f7; --fg-dim: #98989d; --accent: #0a84ff; --accent-ink: #ffffff; --accent-soft: rgba(10, 132, 255, 0.2);
+  --seg-thumb: #636366; --card-c: #aeaeb2; --tooth-c: #ff9f0a; --ref-c: #64d2ff;
+  --ok: #30d158; --warn: #ff9f0a; --bad: #ff453a; --shadow: none;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.47 var(--font-body); -webkit-font-smoothing: antialiased;
+  padding-block: 40px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1160px; margin: 0 auto; display: grid; gap: 24px; }
+header h1 { font: 700 40px/1.08 var(--font-display); letter-spacing: -0.022em; margin: 0 0 10px; text-wrap: balance; }
+header p { margin: 0; color: var(--fg-dim); font-size: 17px; line-height: 1.47; max-width: 56ch; }
+.example-banner {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: 14px; color: var(--fg);
+  background: var(--accent-soft); font-size: 14px;
+}
+.example-banner[hidden] { display: none; }
+.app { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .app { grid-template-columns: minmax(0, 1fr); } header h1 { font-size: 34px; } }
+.col { display: grid; gap: 20px; min-width: 0; }
+.panel { background: var(--surface); border-radius: 20px; padding: 22px; min-width: 0; box-shadow: var(--shadow); }
+.panel h2 { font: 600 19px/1.2 var(--font-display); letter-spacing: -0.012em; margin: 0 0 16px; color: var(--fg); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+button, .btn, select, input[type="text"], input[type="number"] {
+  font: inherit; color: var(--fg); background: var(--surface-2); border: 0;
+  border-radius: 10px; padding: 8px 14px; min-height: 40px;
+}
+button, .btn {
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--accent-soft); color: var(--accent); font-weight: 500; border-radius: 980px; padding: 8px 18px;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+button:hover, .btn:hover { opacity: 0.82; }
+button:active, .btn:active { transform: scale(0.98); }
+button:focus-visible, .btn:focus-within, input:focus-visible, select:focus-visible, canvas:focus-visible, summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px;
+}
+button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.seg { display: flex; gap: 2px; padding: 2px; margin-bottom: 14px; background: var(--surface-2); border-radius: 11px; }
+.seg button {
+  flex: 1 1 0; min-width: 0; background: transparent; color: var(--fg); border-radius: 9px; padding: 7px 8px;
+  font-size: 14px; font-weight: 500; min-height: 34px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.seg button[aria-pressed="true"] { background: var(--seg-thumb); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04); font-weight: 600; }
+.seg button:hover { opacity: 1; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dot.card { background: var(--card-c); } .dot.tooth { background: var(--tooth-c); } .dot.ref { background: var(--ref-c); }
+.step { font-size: 12px; color: var(--fg-dim); font-weight: 500; }
+.stage { position: relative; background: #000; border-radius: 14px; overflow: hidden; }
+canvas#view { display: block; width: 100%; touch-action: none; cursor: crosshair; }
+.hint { margin: 12px 2px 0; color: var(--fg-dim); font-size: 14px; min-height: 20px; }
+.tips summary { cursor: pointer; font: 600 17px/1.3 var(--font-display); letter-spacing: -0.01em; list-style: none; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; }
+.tips summary::-webkit-details-marker { display: none; }
+.tips summary::after { content: "›"; font-size: 24px; color: var(--fg-dim); transition: transform 0.2s ease; }
+.tips details[open] summary::after { transform: rotate(90deg); }
+.tips ul { margin: 12px 0 0; padding-left: 18px; color: var(--fg-dim); font-size: 15px; }
+.tips li { margin: 5px 0; }
+
+.swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sw { border-radius: 14px; overflow: hidden; background: var(--surface-2); }
+.sw .chip { height: 96px; background: var(--surface-2); }
+.sw .cap { padding: 8px 12px; font-size: 13px; color: var(--fg-dim); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.sw .cap b { color: var(--fg); font-family: var(--font-data); font-weight: 500; font-size: 12px; }
+.de-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 10px; }
+.de-num { font: 600 60px/1 var(--font-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.de-unit { color: var(--fg-dim); font-size: 15px; font-weight: 500; }
+.pill { padding: 4px 12px; border-radius: 99px; font-size: 13px; font-weight: 600; background: color-mix(in srgb, currentColor 14%, transparent); }
+.pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); } .pill.none { color: var(--fg-dim); }
+.scale { position: relative; height: 6px; background: var(--surface-2); border-radius: 3px; margin: 8px 0 26px; }
+.scale .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--fg-dim); }
+.scale .fill.ok { background: var(--ok); } .scale .fill.warn { background: var(--warn); } .scale .fill.bad { background: var(--bad); }
+.scale .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px; background: var(--fg); opacity: 0.35; }
+.scale .tick span { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font: 12px var(--font-body); color: var(--fg-dim); white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 9px 4px; border-bottom: 0.5px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+th:first-child, td:first-child { text-align: left; }
+th { font: 500 12px var(--font-body); color: var(--fg-dim); }
+td { font: 15px var(--font-display); }
+td:first-child { color: var(--fg-dim); font-size: 14px; }
+ul.warns { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+ul.warns li { padding: 10px 12px 10px 34px; position: relative; background: var(--surface-2); font-size: 14px; border-radius: 12px; }
+ul.warns li::before { content: ""; position: absolute; left: 14px; top: 17px; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+ul.warns li.good::before { background: var(--ok); }
+.mono { font-family: var(--font-data); font-size: 12px; color: var(--fg-dim); }
+.fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.fields label, .field { display: grid; gap: 6px; font-size: 13px; color: var(--fg-dim); }
+.fields input, .field input, .field select { width: 100%; color: var(--fg); font-size: 16px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+.row > * { min-width: 0; }
+input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 40px; background: transparent; padding: 0; }
+input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; }
+input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.note { color: var(--fg-dim); font-size: 13px; line-height: 1.45; margin: 12px 0 0; }
+textarea#csvBox { width: 100%; min-height: 92px; font: 12px/1.45 var(--font-data); color: var(--fg); background: var(--surface-2); border: 0; border-radius: 12px; padding: 12px; resize: vertical; margin-top: 12px; }
+figure.report { margin: 16px 0 0; }
+figure.report img { width: 100%; max-width: 420px; height: auto; border-radius: 12px; display: block; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12); }
+figure.report figcaption { color: var(--fg-dim); font-size: 13px; margin-top: 8px; }
+.empty { color: var(--fg-dim); font-size: 14px; margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .scale .fill { transition: width 0.3s ease; } }
+@media (prefers-reduced-motion: reduce) { button, .btn, .tips summary::after { transition: none; } }
+
+.app { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 880px) { .app { grid-template-columns: minmax(0, 1fr); } }
+.fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; align-items: end; }
+@media (max-width: 520px) { .fields.two { grid-template-columns: minmax(0, 1fr); } }
+.btnrow, .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+#view { width: 100%; height: auto; display: block; touch-action: none; }
+.stage { background: #111; }
+#timeline svg { width: 100%; height: auto; display: block; margin-top: 12px; cursor: pointer; }
+#timeline text { font: 11px var(--font-body); fill: var(--fg-dim); }
+.slide { display: grid; gap: 4px; font-size: 13px; color: var(--fg-dim); margin: 6px 0 12px; }
+.slide b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.progress { height: 6px; background: var(--surface-2); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+.progress div { height: 100%; width: 0; background: var(--accent); transition: width 0.15s ease; }
+.progress[hidden] { display: none; }
+.crops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.crops figure { margin: 0; background: var(--surface-2); border-radius: 12px; overflow: hidden; }
+.crops canvas { width: 100%; height: auto; display: block; }
+.crops figcaption { padding: 6px 10px; font-size: 12px; color: var(--fg-dim); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--fg-dim); margin: 0 0 12px; }
+.legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+td.num, th.num { text-align: right; }
+#resTab td, #resTab th { padding: 8px 6px; white-space: normal; }
+#resTab td:first-child { color: var(--fg); font-weight: 600; }
+figure.report img { max-width: 100%; border-radius: 12px; }
+.empty[hidden] { display: none; }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Analisador do Sorriso em Movimento</h1>
+    <p>Grave um vídeo curto do paciente em repouso, falando e sorrindo. O app encontra os lábios quadro a quadro e mede a abertura interlabial, a exposição dos dentes, a largura do sorriso, o corredor bucal, a gengiva visível e o arco do sorriso.</p>
+  </header>
+
+  <div class="banner" role="note"><span><strong>Nada sai do seu aparelho.</strong> O vídeo e as fotos são processados no navegador e não são enviados a nenhum servidor. Só o detector facial (cerca de 10 MB) é baixado na primeira vez. As medidas em milímetros usam a distância interpupilar como régua e são estimativas de estudo, não medidas clínicas validadas. O corredor bucal, a gengiva e o arco são leituras automáticas por cor e devem ser conferidas na imagem.</span></div>
+
+  <div class="app">
+    <div class="col">
+      <section class="panel" aria-labelledby="h-src">
+        <h2 id="h-src">1. Origem das imagens</h2>
+        <div class="seg" role="group" aria-label="Origem">
+          <button type="button" id="srcVideo" aria-pressed="true">Vídeo</button>
+          <button type="button" id="srcPhoto" aria-pressed="false">Fotos</button>
+          <button type="button" id="srcCam" aria-pressed="false">Câmera</button>
+        </div>
+        <div id="boxVideo">
+          <div class="row"><label class="btn" for="fileVideo">Escolher vídeo<input id="fileVideo" type="file" accept="video/*"></label><span class="note" id="videoName" style="margin:0"></span></div>
+          <p class="note">Peça ao paciente: boca relaxada, depois falar "M" e "E", depois sorrir. De frente, rosto na altura da câmera, boa luz, até 30 segundos.</p>
+        </div>
+        <div id="boxPhoto" hidden>
+          <div class="row">
+            <label class="btn" for="filePhotoRest">Foto em repouso<input id="filePhotoRest" type="file" accept="image/*"></label>
+            <label class="btn" for="filePhotoSmile">Foto sorrindo<input id="filePhotoSmile" type="file" accept="image/*"></label>
+          </div>
+          <p class="note">Fotos de frente, com os dois olhos visíveis. A medida em mm vem da distância entre as pupilas.</p>
+        </div>
+        <div id="boxCam" hidden>
+          <div class="btnrow"><button type="button" id="camStart" class="primary">Ligar a câmera</button><button type="button" id="camStop">Desligar</button></div>
+          <div class="btnrow" style="margin-top:10px" id="camCap">
+            <button type="button" data-cap="repouso">Capturar repouso</button>
+            <button type="button" data-cap="sorriso máximo">Capturar sorriso</button>
+            <button type="button" data-cap="som E">Capturar "E"</button>
+            <button type="button" data-cap="som F/V">Capturar "F/V"</button>
+          </div>
+        </div>
+        <div class="fields two" style="margin-top:16px">
+          <label for="ipd">Distância interpupilar (mm)<input id="ipd" type="text" inputmode="decimal" autocomplete="off" value="63"></label>
+          <label for="statusTxt">Estado<input id="statusTxt" type="text" readonly value="Aguardando"></label>
+        </div>
+        <p class="note">Se você mediu a distância entre as pupilas do paciente, digite aqui. O padrão de 63 mm é uma média de adultos, e cada 3 mm de diferença muda as medidas em cerca de 5%.</p>
+        <div class="progress" id="prog" hidden><div id="progBar"></div></div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-view">
+        <h2 id="h-view">2. Quadro</h2>
+        <div class="stage"><canvas id="view" width="640" height="480" aria-label="Quadro analisado com os pontos medidos"></canvas></div>
+        <div id="tlBox" hidden>
+          <div id="timeline"></div>
+          <label class="slide" for="scrub">Posição no vídeo: <b id="tNow">0,0 s</b><input id="scrub" type="range" min="0" max="0" step="1" value="0"></label>
+          <div class="btnrow" id="markRow">
+            <button type="button" data-mark="repouso">Usar como repouso</button>
+            <button type="button" data-mark="sorriso máximo">Usar como sorriso máximo</button>
+            <button type="button" data-mark="som E">Usar como "E"</button>
+            <button type="button" data-mark="som F/V">Usar como "F/V"</button>
+          </div>
+        </div>
+        <p class="hint" id="hint">Escolha um vídeo, duas fotos ou ligue a câmera.</p>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-labelledby="h-res">
+        <h2 id="h-res">Medidas por quadro marcado</h2>
+        <div class="tablewrap"><table id="resTab"></table></div>
+        <p class="empty" id="resEmpty">Nenhum quadro marcado ainda.</p>
+        <ul class="warns" id="warns"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="h-crops">
+        <h2 id="h-crops">Boca em cada quadro</h2>
+        <div class="legend"><span><i style="background:#37d6c8"></i>Dentes</span><span><i style="background:#ff6fa5"></i>Gengiva</span><span><i style="background:#ffd23f"></i>Curva incisal</span><span><i style="background:#ffffff"></i>Lábio inferior</span></div>
+        <div class="crops" id="crops"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-rel">
+        <h2 id="h-rel">Relatório</h2>
+        <div class="btnrow">
+          <button type="button" id="btnPng" hidden>Baixar PNG</button>
+          <button type="button" id="btnCopy">Copiar resumo</button>
+          <button type="button" id="btnCsv">Copiar série do vídeo (CSV)</button>
+        </div>
+        <textarea id="csvBox" hidden readonly></textarea>
+        <p class="note">O relatório em imagem mostra só a região da boca, com as marcações e a tabela de medidas.</p>
+        <figure class="report"><img id="repImg" alt="Relatório do analisador de sorriso" hidden></figure>
+      </section>
+
+      <section class="panel tips">
+        <details><summary>Como o cálculo funciona e limites</summary>
+          <ul>
+            <li>Um modelo de malha facial (MediaPipe Face Mesh) roda no navegador e devolve 478 pontos do rosto, incluindo as pupilas e o contorno interno dos lábios.</li>
+            <li>A escala vem da distância entre as pupilas (63 mm por padrão). A cabeça inclinada é corrigida pela linha das pupilas. Quadros com o rosto girado mais de 15 graus são marcados e não entram na escolha automática.</li>
+            <li>Dentes e gengiva são separados por cor dentro da abertura da boca: dentes são claros e pouco saturados, gengiva é rosada. Sombras, resina escura, restaurações muito amareladas e luz colorida podem enganar a leitura.</li>
+            <li>Exposição dos dentes é a altura da primeira fileira de dentes no centro da boca. Gengiva visível é a faixa rosada entre o lábio superior e os dentes no centro. Corredor bucal é o espaço escuro lateral em relação à largura interna do sorriso.</li>
+            <li>Arco do sorriso compara a curva da borda incisal com a curva do lábio inferior. Só é calculado quando existe uma linha visível entre os dentes de cima e os de baixo.</li>
+            <li>Repouso e sorriso máximo são sugeridos automaticamente pela menor e pela maior largura da boca no vídeo. Você pode trocar o quadro com o controle de posição.</li>
+            <li>Este é um instrumento de estudo e documentação. Não é uma medida validada contra paquímetro ou modelo e não substitui o exame clínico.</li>
+          </ul>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+"use strict";
+// ---------- Núcleo de análise do sorriso (landmarks do MediaPipe Face Mesh + cor dos dentes) ----------
+// lm: lista de [x, y, z] normalizados (0 a 1). Índices da malha de 468 pontos (+10 da íris).
+var IDX = {
+  irisA: 468, irisB: 473, eyeOuterA: 33, eyeInnerA: 133, eyeOuterB: 263, eyeInnerB: 362,
+  upIn: 13, loIn: 14, cornA: 78, cornB: 308, upOut: 0, loOut: 17, cornOutA: 61, cornOutB: 291, nose: 1
+};
+var POLY = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95];
+var LOWER_CURVE = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308];
+var UPPER_CURVE = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308];
+var IPD_DEFAULT = 63;
+var YAW_MAX = 15;
+
+function dist(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }
+function median(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }); var m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+function round1(x) { return Math.round(x * 10) / 10; }
+
+// Centro de cada olho em px (usa a íris quando existe, senão a média dos cantos)
+function eyeCenters(lm, W, H) {
+  function P(i) { return [lm[i][0] * W, lm[i][1] * H]; }
+  var a, b;
+  if (lm.length > IDX.irisB) { a = P(IDX.irisA); b = P(IDX.irisB); }
+  else { var o1 = P(IDX.eyeOuterA), i1 = P(IDX.eyeInnerA), o2 = P(IDX.eyeOuterB), i2 = P(IDX.eyeInnerB); a = [(o1[0] + i1[0]) / 2, (o1[1] + i1[1]) / 2]; b = [(o2[0] + i2[0]) / 2, (o2[1] + i2[1]) / 2]; }
+  if (a[0] > b[0]) { var t = a; a = b; b = t; }
+  return [a, b];
+}
+// Ângulo de rolagem da cabeça: linha entre os olhos
+function rollAngle(lm, W, H) { var e = eyeCenters(lm, W, H); return Math.atan2(e[1][1] - e[0][1], e[1][0] - e[0][0]); }
+// Guinada (giro lateral) estimada pela profundidade dos cantos externos dos olhos
+function yawDeg(lm) {
+  var a = lm[IDX.eyeOuterA], b = lm[IDX.eyeOuterB];
+  var dx = Math.abs(b[0] - a[0]), dz = a[2] - b[2];
+  if (a[0] > b[0]) dz = -dz;
+  return Math.atan2(dz, Math.max(dx, 1e-6)) * 180 / Math.PI;
+}
+// Pontos em px, no referencial do quadro nivelado (olhos na horizontal), em torno do ponto médio dos olhos
+function levelPoints(lm, W, H) {
+  var e = eyeCenters(lm, W, H), th = Math.atan2(e[1][1] - e[0][1], e[1][0] - e[0][0]);
+  var c = [(e[0][0] + e[1][0]) / 2, (e[0][1] + e[1][1]) / 2], cs = Math.cos(-th), sn = Math.sin(-th);
+  var pts = lm.map(function (p) { var x = p[0] * W - c[0], y = p[1] * H - c[1]; return [c[0] + x * cs - y * sn, c[1] + x * sn + y * cs]; });
+  var eL = e.map(function (p) { var x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + x * cs - y * sn, c[1] + x * sn + y * cs]; });
+  return { pts: pts, theta: th, center: c, ipdPx: dist(eL[0], eL[1]) };
+}
+function landmarkMetrics(lm, W, H, ipdMm) {
+  var L = levelPoints(lm, W, H), p = L.pts, mmpp = (ipdMm || IPD_DEFAULT) / L.ipdPx;
+  var yaw = yawDeg(lm);
+  var gap = Math.abs(p[IDX.loIn][1] - p[IDX.upIn][1]) * mmpp;
+  var innerW = dist(p[IDX.cornA], p[IDX.cornB]) * mmpp;
+  var outerW = dist(p[IDX.cornOutA], p[IDX.cornOutB]) * mmpp;
+  return { theta: L.theta, center: L.center, pts: p, ipdPx: L.ipdPx, mmpp: mmpp, yaw: yaw, yawOk: Math.abs(yaw) <= YAW_MAX,
+    gap: gap, innerW: innerW, outerW: outerW, smileIndex: gap > 0.3 ? innerW / gap : null };
+}
+
+function pointInPoly(x, y, poly) {
+  var inside = false;
+  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    var xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+// Ajuste quadrático y = a x^2 + b x + c por mínimos quadrados (centrado em x0 para estabilidade)
+function fitQuad(xs, ys) {
+  var n = xs.length; if (n < 4) return null;
+  var x0 = xs.reduce(function (s, v) { return s + v; }, 0) / n;
+  var S = [0, 0, 0, 0, 0], T = [0, 0, 0];
+  for (var i = 0; i < n; i++) { var x = xs[i] - x0, y = ys[i]; var xp = 1; for (var k = 0; k < 5; k++) { S[k] += xp; xp *= x; } T[0] += y; T[1] += y * x; T[2] += y * x * x; }
+  var M = [[S[0], S[1], S[2], T[0]], [S[1], S[2], S[3], T[1]], [S[2], S[3], S[4], T[2]]];
+  for (var c = 0; c < 3; c++) {
+    var piv = c; for (var r = c + 1; r < 3; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    var tmp = M[c]; M[c] = M[piv]; M[piv] = tmp;
+    if (Math.abs(M[c][c]) < 1e-12) return null;
+    for (var r2 = 0; r2 < 3; r2++) if (r2 !== c) { var f = M[r2][c] / M[c][c]; for (var k2 = c; k2 < 4; k2++) M[r2][k2] -= f * M[c][k2]; }
+  }
+  return { a: M[2][3] / M[2][2], b: M[1][3] / M[1][1], c: M[0][3] / M[0][0], x0: x0 };
+}
+function quadAt(q, x) { var u = x - q.x0; return q.a * u * u + q.b * u + q.c; }
+
+// Análise do interior da boca no quadro nivelado. img = { data, width, height } (RGBA).
+function analyseMouth(img, pts, mmpp) {
+  var poly = POLY.map(function (i) { return pts[i]; });
+  var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  poly.forEach(function (p) { if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0]; if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1]; });
+  var x0 = Math.max(0, Math.floor(minX) - 1), x1 = Math.min(img.width - 1, Math.ceil(maxX) + 1);
+  var y0 = Math.max(0, Math.floor(minY) - 1), y1 = Math.min(img.height - 1, Math.ceil(maxY) + 1);
+  var w = x1 - x0 + 1, h = y1 - y0 + 1;
+  var res = { roi: { x: x0, y: y0, w: w, h: h }, ok: false };
+  if (w < 12 || h < 3) { res.reason = 'boca pequena demais'; res.teethRatio = 0; return res; }
+  var inside = new Uint8Array(w * h), teeth = new Uint8Array(w * h), gum = new Uint8Array(w * h);
+  var n = 0;
+  for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) if (pointInPoly(x0 + x + 0.5, y0 + y + 0.5, poly)) { inside[y * w + x] = 1; n++; }
+  // erosão de 1 px para tirar a borda do lábio
+  var core = new Uint8Array(w * h);
+  for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) { var k = y * w + x; if (inside[k] && inside[k - 1] && inside[k + 1] && inside[k - w] && inside[k + w]) core[k] = 1; }
+  var cn = 0, vsum = 0;
+  for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
+    var kk = y * w + x; if (!core[kk]) continue;
+    var o = ((y0 + y) * img.width + (x0 + x)) * 4, r = img.data[o], g = img.data[o + 1], b = img.data[o + 2];
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), V = mx / 255, S = mx ? (mx - mn) / mx : 0, rg = (r - g) / Math.max(r, 1);
+    cn++; vsum += V;
+    if (V > 0.32 && S < 0.35 && rg < 0.2) teeth[kk] = 1;
+    else if (V > 0.3 && rg >= 0.28 && S > 0.25) gum[kk] = 1;
+  }
+  res.meanV = cn ? vsum / cn : 0;
+  // limpeza: maioria 3x3
+  var t2 = new Uint8Array(w * h);
+  for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) {
+    var s = 0; for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) s += teeth[(y + dy) * w + x + dx];
+    t2[y * w + x] = (s >= 5 && core[y * w + x]) ? 1 : 0;
+  }
+  teeth = t2;
+  var tcount = 0; for (var i2 = 0; i2 < teeth.length; i2++) tcount += teeth[i2];
+  res.teethRatio = cn ? tcount / cn : 0;
+  res.teeth = teeth; res.gum = gum; res.inside = inside; res.core = core;
+  res.ok = true;
+  if (tcount < 12) { res.noTeeth = true; return res; }
+  // extensão lateral dos dentes e corredor bucal
+  var tMinX = Infinity, tMaxX = -Infinity;
+  for (y = 0; y < h; y++) for (x = 0; x < w; x++) if (teeth[y * w + x]) { if (x < tMinX) tMinX = x; if (x > tMaxX) tMaxX = x; }
+  var cA = pts[IDX.cornA][0] - x0, cB = pts[IDX.cornB][0] - x0, mw = cB - cA;
+  res.teethWidthMm = (tMaxX - tMinX + 1) * mmpp;
+  res.corridorLeft = Math.max(0, (tMinX - cA) / mw) * 100;
+  res.corridorRight = Math.max(0, (cB - tMaxX) / mw) * 100;
+  res.corridorTotal = Math.max(0, 1 - (tMaxX - tMinX + 1) / mw) * 100;
+  // varredura por colunas: primeira sequência de dentes (coroa superior), borda incisal e gengiva acima dos dentes
+  var cx = (cA + cB) / 2, band = Math.max(2, mw * 0.12);
+  var edges = [], edgeX = [], gumH = [], dispH = [], merged = 0, cols = 0;
+  var upY = function (xx) { for (var yy = 0; yy < h; yy++) if (inside[yy * w + xx]) return yy; return -1; };
+  var loY = function (xx) { for (var yy = h - 1; yy >= 0; yy--) if (inside[yy * w + xx]) return yy; return -1; };
+  for (x = Math.max(1, tMinX); x <= Math.min(w - 2, tMaxX); x++) {
+    var u = upY(x), l = loY(x); if (u < 0) continue;
+    var yt = -1; for (y = u; y <= l; y++) if (teeth[y * w + x]) { yt = y; break; }
+    if (yt < 0) continue;
+    var ye = yt, gapRun = 0;
+    for (y = yt; y <= l; y++) { if (teeth[y * w + x]) { ye = y; gapRun = 0; } else { gapRun++; if (gapRun > 1) break; } }
+    var isMerged = ye >= l - 2;
+    cols++; if (isMerged) merged++;
+    if (!isMerged) { edges.push(ye); edgeX.push(x); }
+    var inBand = Math.abs(x - cx) <= band;
+    if (inBand) {
+      var gc = 0, tot = 0; for (y = u; y < yt; y++) { tot++; if (gum[y * w + x]) gc++; }
+      gumH.push(tot > 0 && gc / tot > 0.5 ? (yt - u) : 0);
+      if (!isMerged) dispH.push(ye - yt + 1);
+    }
+  }
+  var g1 = median(gumH); res.gumMm = g1 === null ? null : g1 * mmpp;
+  var d1 = median(dispH); res.displayMm = d1 === null ? null : d1 * mmpp;
+  res.mergedFrac = cols ? merged / cols : 1;
+  // arco do sorriso: curva incisal contra a curva do lábio inferior
+  if (edges.length >= 8 && res.mergedFrac < 0.4) {
+    var qe = fitQuad(edgeX, edges), span = tMaxX - tMinX;
+    var lx = [], ly = []; LOWER_CURVE.forEach(function (i) { lx.push(pts[i][0] - x0); ly.push(pts[i][1] - y0); });
+    var ql = fitQuad(lx, ly);
+    if (qe && ql) {
+      var xa = tMinX + span * 0.1, xb = tMaxX - span * 0.1, xm = (tMinX + tMaxX) / 2;
+      var sagE = (quadAt(qe, xm) - (quadAt(qe, xa) + quadAt(qe, xb)) / 2) * mmpp;
+      var la = pts[IDX.cornA][0] - x0, lb = pts[IDX.cornB][0] - x0, lm_ = (la + lb) / 2;
+      var sagL = (quadAt(ql, lm_) - (quadAt(ql, la + (lb - la) * 0.1) + quadAt(ql, lb - (lb - la) * 0.1)) / 2) * mmpp;
+      res.arc = { sagEdge: sagE, sagLip: sagL, qe: qe, ql: ql, xa: xa, xb: xb, la: la + (lb - la) * 0.1, lb: lb - (lb - la) * 0.1 };
+      var ratio = sagL > 0.2 ? sagE / sagL : null;
+      res.arc.ratio = ratio;
+      if (sagE < -0.25) res.arc.type = 'reversa';
+      else if (sagE <= 0.25) res.arc.type = 'reta';
+      else if (ratio !== null && ratio >= 0.6 && ratio <= 1.5) res.arc.type = 'consonante';
+      else res.arc.type = 'curva diferente da do lábio';
+    }
+  } else res.arcNote = 'dentes inferiores em contato ou sem linha de separação visível';
+  return res;
+}
+function gumClass(mm) {
+  if (mm === null || mm === undefined) return null;
+  if (mm >= 3) return 'alta (gengiva visível acima de 3 mm)';
+  if (mm > 0.5) return 'média (gengiva visível até 3 mm)';
+  return 'sem gengiva visível no centro';
+}
+// Escolha automática dos quadros: repouso = menor largura da boca, sorriso = maior, entre quadros com rosto de frente
+function pickKeys(samples) {
+  var ok = samples.filter(function (s) { return s.m && s.m.yawOk; });
+  if (ok.length < 2) return { rest: null, smile: null };
+  var rest = ok[0], smile = ok[0];
+  ok.forEach(function (s) { if (s.m.innerW + s.m.gap * 0.5 < rest.m.innerW + rest.m.gap * 0.5) rest = s; if (s.m.innerW > smile.m.innerW) smile = s; });
+  return { rest: rest, smile: smile };
+}
+
+// ---------- Interface ----------
+var CAN_DOWNLOAD = true;
+var HAS_CAM = true;
+var LOCAL_FIRST = true;
+var MESH_VER = '0.4.1633559619';
+var CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@' + MESH_VER;
+var MAXW = 960;
+function $(id) { return document.getElementById(id); }
+function fmt(n, d) { return (n === null || n === undefined || isNaN(n)) ? '-' : n.toFixed(d === undefined ? 1 : d).replace('.', ','); }
+function parseNum(s) { var v = parseFloat(String(s).trim().replace(',', '.')); return isNaN(v) ? null : v; }
+function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+var S = { src: 'video', mesh: null, meshBase: null, samples: [], keys: {}, video: null, cur: -1, camStream: null, camBusy: false, camLoop: false, lastLm: null };
+var KEY_ORDER = ['repouso', 'som E', 'som F/V', 'sorriso máximo'];
+
+function setStatus(t) { $('statusTxt').value = t; }
+function setHint(t) { $('hint').textContent = t; }
+function ipdMm() { var v = parseNum($('ipd').value); return v && v > 40 && v < 90 ? v : IPD_DEFAULT; }
+
+// ----- detector -----
+function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = function () { rej(new Error('falha ao carregar ' + src)); }; document.head.appendChild(s); }); }
+async function ensureMesh() {
+  if (S.mesh) return S.mesh;
+  setStatus('Carregando o detector facial...'); setHint('Baixando o detector facial (cerca de 10 MB, só na primeira vez).');
+  var bases = LOCAL_FIRST ? ['./mediapipe', CDN] : [CDN], base = null, lastErr = null;
+  for (var i = 0; i < bases.length && !base; i++) { try { await loadScript(bases[i] + '/face_mesh.js'); base = bases[i]; } catch (e) { lastErr = e; } }
+  if (!base || typeof FaceMesh === 'undefined') throw lastErr || new Error('FaceMesh indisponível');
+  var fm = new FaceMesh({ locateFile: function (f) { return base + '/' + f; } });
+  fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5, selfieMode: false });
+  fm.onResults(function (r) { if (S.pending) { var p = S.pending; S.pending = null; p(r.multiFaceLandmarks && r.multiFaceLandmarks[0] ? r.multiFaceLandmarks[0].map(function (q) { return [q.x, q.y, q.z]; }) : null); } });
+  await fm.initialize();
+  S.mesh = fm; setStatus('Detector pronto');
+  return fm;
+}
+function detect(canvas) {
+  return new Promise(function (resolve, reject) {
+    S.pending = resolve;
+    S.mesh.send({ image: canvas }).catch(function (e) { S.pending = null; reject(e); });
+  });
+}
+
+// ----- quadros -----
+var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
+function drawSource(src) {
+  var sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
+  var k = Math.min(1, MAXW / sw); work.width = Math.round(sw * k); work.height = Math.round(sh * k);
+  wctx.drawImage(src, 0, 0, work.width, work.height);
+  return { W: work.width, H: work.height };
+}
+// Quadro nivelado (olhos na horizontal) em um canvas novo
+function levelCanvas(m, W, H) {
+  var c = document.createElement('canvas'); c.width = W; c.height = H;
+  var x = c.getContext('2d', { willReadFrequently: true });
+  var e = levelPointsCenter(m);
+  x.translate(e[0], e[1]); x.rotate(-m.theta); x.translate(-e[0], -e[1]);
+  x.drawImage(work, 0, 0);
+  return c;
+}
+function levelPointsCenter(m) { return m.center; }
+
+function drawOverlay(ctx, m, mouth, opt) {
+  var p = m.pts; opt = opt || {};
+  ctx.save();
+  ctx.lineWidth = Math.max(1, ctx.canvas.width / 480);
+  if (mouth && mouth.ok) {
+    var r = mouth.roi, id = ctx.createImageData(r.w, r.h);
+    for (var i = 0; i < r.w * r.h; i++) {
+      if (mouth.teeth[i]) { id.data[i * 4] = 55; id.data[i * 4 + 1] = 214; id.data[i * 4 + 2] = 200; id.data[i * 4 + 3] = 150; }
+      else if (mouth.gum[i] && mouth.core[i]) { id.data[i * 4] = 255; id.data[i * 4 + 1] = 111; id.data[i * 4 + 2] = 165; id.data[i * 4 + 3] = 130; }
+    }
+    var tmp = document.createElement('canvas'); tmp.width = r.w; tmp.height = r.h; tmp.getContext('2d').putImageData(id, 0, 0);
+    ctx.drawImage(tmp, r.x, r.y);
+    if (mouth.arc) {
+      var a = mouth.arc; ctx.strokeStyle = '#ffd23f'; ctx.beginPath();
+      for (var x = a.xa; x <= a.xb; x += 2) { var y = quadAt(a.qe, x) + r.y; if (x === a.xa) ctx.moveTo(x + r.x, y); else ctx.lineTo(x + r.x, y); } ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.beginPath();
+      for (x = a.la; x <= a.lb; x += 2) { y = quadAt(a.ql, x) + r.y; if (x === a.la) ctx.moveTo(x + r.x, y); else ctx.lineTo(x + r.x, y); } ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath();
+  POLY.forEach(function (i, k) { if (k === 0) ctx.moveTo(p[i][0], p[i][1]); else ctx.lineTo(p[i][0], p[i][1]); }); ctx.closePath(); ctx.stroke();
+  if (!opt.mouthOnly) {
+    ctx.fillStyle = '#ffd23f';
+    [IDX.irisA, IDX.irisB].forEach(function (i) { if (p[i]) { ctx.beginPath(); ctx.arc(p[i][0], p[i][1], ctx.canvas.width / 220, 0, 6.3); ctx.fill(); } });
+  }
+  ctx.fillStyle = '#37d6c8';
+  [IDX.cornA, IDX.cornB, IDX.upIn, IDX.loIn].forEach(function (i) { ctx.beginPath(); ctx.arc(p[i][0], p[i][1], ctx.canvas.width / 300 + 1, 0, 6.3); ctx.fill(); });
+  ctx.restore();
+}
+function quadAtLocal(q, x) { return quadAt(q, x); }
+
+// Mede um quadro já desenhado em `work`. Devolve { m, mouth, level, W, H } ou null.
+async function measureCurrent(W, H, lmOverride) {
+  var lm = lmOverride || await detect(work);
+  if (!lm) return null;
+  var m = landmarkMetrics(lm, W, H, ipdMm());
+  var lv = levelCanvas(m, W, H);
+  var img = lv.getContext('2d').getImageData(0, 0, W, H);
+  var mouth = analyseMouth(img, m.pts, m.mmpp);
+  return { m: m, mouth: mouth, level: lv, W: W, H: H, lm: lm };
+}
+function showOnView(meas, withMask) {
+  var v = $('view'); v.width = meas.W; v.height = meas.H;
+  var c = v.getContext('2d'); c.drawImage(meas.level, 0, 0);
+  drawOverlay(c, meas.m, withMask ? meas.mouth : null);
+}
+
+// ----- chaves (quadros marcados) -----
+function storeKey(label, meas) {
+  var m = meas.m, mo = meas.mouth, p = m.pts;
+  var pad = Math.max(10, (p[IDX.cornB][0] - p[IDX.cornA][0]) * 0.5);
+  var x0 = Math.max(0, Math.floor(p[IDX.cornOutA][0] - pad)), x1 = Math.min(meas.W, Math.ceil(p[IDX.cornOutB][0] + pad));
+  var yTop = Math.min(p[IDX.upOut][1], p[IDX.upIn][1]) - pad * 1.1, yBot = Math.max(p[IDX.loOut][1], p[IDX.loIn][1]) + pad * 1.1;
+  var y0 = Math.max(0, Math.floor(yTop)), y1 = Math.min(meas.H, Math.ceil(yBot));
+  var crop = document.createElement('canvas'); crop.width = Math.max(40, x1 - x0); crop.height = Math.max(30, y1 - y0);
+  var cx = crop.getContext('2d'); cx.drawImage(meas.level, x0, y0, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  cx.translate(-x0, -y0); drawOverlay(cx, m, mo, { mouthOnly: true });
+  S.keys[label] = { label: label, m: m, mouth: mo, crop: crop };
+  renderResults();
+}
+function metricRows() {
+  return [
+    ['Abertura interlabial (mm)', function (k) { return fmt(k.m.gap, 1); }],
+    ['Largura interna da boca (mm)', function (k) { return fmt(k.m.innerW, 1); }],
+    ['Largura entre comissuras externas (mm)', function (k) { return fmt(k.m.outerW, 1); }],
+    ['Índice do sorriso (largura / abertura)', function (k) { return fmt(k.m.smileIndex, 1); }],
+    ['Dentes na abertura da boca (%)', function (k) { return k.mouth.ok ? fmt(k.mouth.teethRatio * 100, 0) : '-'; }],
+    ['Altura da primeira fileira de dentes (mm)', function (k) { return (k.mouth.ok && !k.mouth.noTeeth) ? fmt(k.mouth.displayMm, 1) : (k.m.gap < 0.5 ? '0 (lábios fechados)' : '-'); }],
+    ['Gengiva visível no centro (mm)', function (k) { return (k.mouth.ok && !k.mouth.noTeeth) ? fmt(k.mouth.gumMm, 1) : '-'; }],
+    ['Linha do lábio superior', function (k) { return (k.mouth.ok && !k.mouth.noTeeth) ? (gumClass(k.mouth.gumMm) || '-') : '-'; }],
+    ['Largura dos dentes visíveis (mm)', function (k) { return (k.mouth.ok && !k.mouth.noTeeth) ? fmt(k.mouth.teethWidthMm, 1) : '-'; }],
+    ['Corredor bucal (% da largura interna)', function (k) { return (k.mouth.ok && !k.mouth.noTeeth) ? fmt(k.mouth.corridorTotal, 0) + ' (E ' + fmt(k.mouth.corridorLeft, 0) + ', D ' + fmt(k.mouth.corridorRight, 0) + ')' : '-'; }],
+    ['Arco do sorriso', function (k) { if (!k.mouth.ok || k.mouth.noTeeth) return '-'; return k.mouth.arc ? k.mouth.arc.type + ' (borda ' + fmt(k.mouth.arc.sagEdge, 1) + ' mm, lábio ' + fmt(k.mouth.arc.sagLip, 1) + ' mm)' : 'não avaliável'; }],
+    ['Giro do rosto', function (k) { return fmt(Math.abs(k.m.yaw), 0) + '°' + (k.m.yawOk ? '' : ' (acima de ' + YAW_MAX + '°)'); }]
+  ];
+}
+function renderResults() {
+  var labels = KEY_ORDER.filter(function (l) { return S.keys[l]; });
+  var t = $('resTab'); t.textContent = '';
+  $('resEmpty').hidden = labels.length > 0;
+  var crops = $('crops'); crops.textContent = '';
+  var w = $('warns'); w.textContent = '';
+  if (!labels.length) { $('repImg').hidden = true; return; }
+  var thead = el('thead'), hr = el('tr'); hr.appendChild(el('th', '', 'Medida'));
+  labels.forEach(function (l) { hr.appendChild(el('th', 'num', l)); }); thead.appendChild(hr); t.appendChild(thead);
+  var tb = el('tbody');
+  metricRows().forEach(function (row) {
+    var tr = el('tr'); tr.appendChild(el('td', '', row[0]));
+    labels.forEach(function (l) { tr.appendChild(el('td', 'num', row[1](S.keys[l]))); });
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+  labels.forEach(function (l) { var f = el('figure'); f.appendChild(S.keys[l].crop); f.appendChild(el('figcaption', '', l)); crops.appendChild(f); });
+  labels.forEach(function (l) {
+    var k = S.keys[l];
+    if (!k.m.yawOk) w.appendChild(el('li', '', 'Quadro "' + l + '": rosto girado ' + fmt(Math.abs(k.m.yaw), 0) + '°. As medidas em mm perdem precisão. Refaça com o paciente de frente.'));
+    if (k.mouth.ok && k.mouth.meanV < 0.18) w.appendChild(el('li', '', 'Quadro "' + l + '": boca muito escura. A separação entre dentes e gengiva pode falhar. Melhore a luz.'));
+    if (k.mouth.ok && k.mouth.roi.w < 60) w.appendChild(el('li', '', 'Quadro "' + l + '": boca com poucos pixels de largura. Aproxime a câmera.'));
+    if (k.mouth.ok && k.mouth.noTeeth && k.m.gap > 1) w.appendChild(el('li', '', 'Quadro "' + l + '": a boca está aberta, mas não foram reconhecidos dentes. Confira a imagem e a luz.'));
+    if (k.mouth.arcNote && !k.mouth.noTeeth) w.appendChild(el('li', 'good', 'Quadro "' + l + '": arco do sorriso não avaliado, ' + k.mouth.arcNote + '.'));
+  });
+  buildReport(labels);
+}
+
+function summaryText() {
+  var labels = KEY_ORDER.filter(function (l) { return S.keys[l]; });
+  var L = ['Analisador do sorriso em movimento (estimativas de estudo, escala pela distância interpupilar de ' + fmt(ipdMm(), 0) + ' mm)'];
+  metricRows().forEach(function (row) { L.push(row[0] + ': ' + labels.map(function (l) { return l + ' ' + row[1](S.keys[l]); }).join(' | ')); });
+  return L.join('\n');
+}
+function csvText() {
+  var L = ['tempo_s;abertura_mm;largura_interna_mm;giro_graus'];
+  S.samples.forEach(function (s) { L.push([s.t.toFixed(2), s.m ? s.m.gap.toFixed(2) : '', s.m ? s.m.innerW.toFixed(2) : '', s.m ? s.m.yaw.toFixed(1) : ''].join(';')); });
+  return L.join('\n');
+}
+function buildReport(labels) {
+  var cols = Math.min(2, labels.length), rows = Math.ceil(labels.length / 2), cw = 420, S2 = 2;
+  var cropH = 0; labels.forEach(function (l) { var c = S.keys[l].crop; cropH = Math.max(cropH, Math.round(c.height * cw / c.width)); });
+  var tabLines = metricRows().length, W = 40 + cols * (cw + 20), H = 90 + rows * (cropH + 40) + tabLines * 24 + 60;
+  var cv = document.createElement('canvas'); cv.width = W * S2; cv.height = H * S2;
+  var c = cv.getContext('2d'); c.scale(S2, S2);
+  var fam = '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
+  c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
+  c.fillStyle = '#1d1d1f'; c.font = '700 22px ' + fam; c.fillText('Análise do sorriso em movimento', 24, 38);
+  c.fillStyle = '#6e6e73'; c.font = '13px ' + fam; c.fillText('Escala pela distância interpupilar de ' + fmt(ipdMm(), 0) + ' mm. Estimativas de estudo.', 24, 60);
+  labels.forEach(function (l, i) {
+    var x = 24 + (i % 2) * (cw + 20), y = 80 + Math.floor(i / 2) * (cropH + 40), cr = S.keys[l].crop, h = Math.round(cr.height * cw / cr.width);
+    c.drawImage(cr, x, y, cw, h); c.fillStyle = '#1d1d1f'; c.font = '600 14px ' + fam; c.fillText(l, x, y + h + 20);
+  });
+  var y0 = 80 + rows * (cropH + 40) + 10;
+  c.font = '12px ' + fam;
+  metricRows().forEach(function (row, i) {
+    var y = y0 + i * 24; c.fillStyle = '#6e6e73'; c.fillText(row[0], 24, y);
+    labels.forEach(function (l, j) { c.fillStyle = '#1d1d1f'; var tx = row[1](S.keys[l]); if (tx.length > 38) tx = tx.slice(0, 36) + '...'; c.fillText(tx, 250 + j * 150, y); });
+  });
+  $('repImg').src = cv.toDataURL('image/png'); $('repImg').hidden = false;
+}
+
+// ----- vídeo -----
+function seek(v, t) { return new Promise(function (res) { var done = false; function f() { if (!done) { done = true; v.removeEventListener('seeked', f); res(); } } v.addEventListener('seeked', f); v.currentTime = t; setTimeout(f, 2500); }); }
+async function loadVideo(file) {
+  try {
+    $('videoName').textContent = file.name;
+    S.samples = []; S.keys = {}; renderResults(); $('tlBox').hidden = true;
+    await ensureMesh();
+    var v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file); S.video = v;
+    await new Promise(function (res, rej) { v.onloadeddata = res; v.onerror = function () { rej(new Error('vídeo não pôde ser lido')); }; });
+    var dur = Math.min(v.duration || 0, 40), step = dur > 20 ? 0.15 : 0.1;
+    if (!(dur > 0)) throw new Error('duração do vídeo desconhecida');
+    $('prog').hidden = false; setStatus('Analisando o vídeo...');
+    var n = Math.floor(dur / step) + 1;
+    for (var i = 0; i < n; i++) {
+      var t = Math.min(dur, i * step); await seek(v, t);
+      var d = drawSource(v); var lm = await detect(work);
+      var m = lm ? landmarkMetrics(lm, d.W, d.H, ipdMm()) : null;
+      S.samples.push({ t: t, lm: lm, m: m, W: d.W, H: d.H });
+      $('progBar').style.width = Math.round((i + 1) / n * 100) + '%';
+      if (i % 4 === 0) setHint('Quadro ' + (i + 1) + ' de ' + n + '. Rosto encontrado em ' + S.samples.filter(function (s) { return s.m; }).length + '.');
+    }
+    $('prog').hidden = true;
+    var found = S.samples.filter(function (s) { return s.m; }).length;
+    if (found < 3) { setStatus('Rosto não encontrado'); setHint('O rosto não foi encontrado em quadros suficientes. Use um vídeo de frente, com boa luz.'); return; }
+    $('scrub').max = S.samples.length - 1; $('tlBox').hidden = false; drawTimeline();
+    var pk = pickKeys(S.samples);
+    if (pk.rest) await markIndex(S.samples.indexOf(pk.rest), 'repouso');
+    if (pk.smile) await markIndex(S.samples.indexOf(pk.smile), 'sorriso máximo');
+    await gotoIndex(pk.smile ? S.samples.indexOf(pk.smile) : 0);
+    setStatus('Pronto'); setHint('Repouso e sorriso máximo foram sugeridos. Use o controle de posição para trocar o quadro e marque também o "E" e o "F/V" se quiser.');
+  } catch (e) { $('prog').hidden = true; setStatus('Erro'); setHint('Não foi possível analisar: ' + e.message); }
+}
+async function gotoIndex(i) {
+  S.cur = i; var s = S.samples[i]; $('scrub').value = i; $('tNow').textContent = fmt(s.t, 1) + ' s';
+  await seek(S.video, s.t); var d = drawSource(S.video);
+  if (s.lm) { var meas = await measureCurrent(d.W, d.H, s.lm); showOnView(meas, true); S.curMeas = meas; }
+  else { var v = $('view'); v.width = d.W; v.height = d.H; v.getContext('2d').drawImage(work, 0, 0); S.curMeas = null; }
+  drawTimeline();
+}
+async function markIndex(i, label) {
+  var s = S.samples[i]; if (!s || !s.lm) { setHint('Neste quadro o rosto não foi encontrado.'); return; }
+  await seek(S.video, s.t); var d = drawSource(S.video);
+  var meas = await measureCurrent(d.W, d.H, s.lm); storeKey(label, meas); S.keys[label].t = s.t;
+}
+function drawTimeline() {
+  var W = 640, H = 130, pl = 36, pr = 8, pt = 8, pb = 22, ss = S.samples; if (!ss.length) return;
+  var tmax = ss[ss.length - 1].t || 1, ymax = 10;
+  ss.forEach(function (s) { if (s.m) ymax = Math.max(ymax, s.m.innerW, s.m.gap); }); ymax = Math.ceil(ymax / 10) * 10;
+  var sx = function (t) { return pl + t / tmax * (W - pl - pr); }, sy = function (v) { return pt + (1 - v / ymax) * (H - pt - pb); };
+  var ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  function A(tag, at, tx) { var e = document.createElementNS(ns, tag); for (var k in at) e.setAttribute(k, at[k]); if (tx !== undefined) e.textContent = tx; svg.appendChild(e); return e; }
+  for (var g = 0; g <= ymax; g += ymax / 5) { A('line', { x1: pl, x2: W - pr, y1: sy(g), y2: sy(g), stroke: 'var(--line)', 'stroke-width': 0.6 }); A('text', { x: pl - 5, y: sy(g) + 4, 'text-anchor': 'end' }, String(Math.round(g))); }
+  for (var tt = 0; tt <= tmax; tt += Math.max(1, Math.round(tmax / 6))) A('text', { x: sx(tt), y: H - 6, 'text-anchor': 'middle' }, tt + ' s');
+  function line(key, color) { var d = '', pen = false; ss.forEach(function (s) { if (s.m) { d += (pen ? 'L' : 'M') + sx(s.t).toFixed(1) + ' ' + sy(s.m[key]).toFixed(1); pen = true; } else pen = false; }); A('path', { d: d, fill: 'none', stroke: color, 'stroke-width': 2 }); }
+  line('innerW', 'var(--accent)'); line('gap', '#ff9f0a');
+  A('text', { x: pl + 6, y: pt + 12 }, 'azul: largura interna (mm)   laranja: abertura interlabial (mm)');
+  KEY_ORDER.forEach(function (l) { var k = S.keys[l]; if (k && k.t !== undefined) { A('line', { x1: sx(k.t), x2: sx(k.t), y1: pt, y2: H - pb, stroke: 'var(--fg-dim)', 'stroke-dasharray': '3 3' }); } });
+  if (S.cur >= 0 && ss[S.cur]) A('line', { x1: sx(ss[S.cur].t), x2: sx(ss[S.cur].t), y1: pt, y2: H - pb, stroke: 'var(--fg)', 'stroke-width': 1.5 });
+  svg.addEventListener('click', function (ev) { var r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W, t = (x - pl) / (W - pl - pr) * tmax, best = 0, bd = 1e9; ss.forEach(function (s, i) { var d = Math.abs(s.t - t); if (d < bd) { bd = d; best = i; } }); gotoIndex(best); });
+  var tl = $('timeline'); tl.textContent = ''; tl.appendChild(svg);
+}
+
+// ----- fotos -----
+function loadImage(file) { return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('imagem inválida')); }; im.src = URL.createObjectURL(file); }); }
+async function loadPhoto(file, label) {
+  try {
+    await ensureMesh(); setStatus('Analisando a foto...');
+    var im = await loadImage(file), d = drawSource(im), meas = await measureCurrent(d.W, d.H);
+    if (!meas) { setStatus('Rosto não encontrado'); setHint('Rosto não encontrado na foto. Use uma foto de frente com os dois olhos visíveis.'); return; }
+    showOnView(meas, true); storeKey(label, meas); setStatus('Pronto'); setHint('Foto analisada: ' + label + '.');
+  } catch (e) { setStatus('Erro'); setHint('Não foi possível analisar: ' + e.message); }
+}
+
+// ----- câmera -----
+async function camStart() {
+  try {
+    await ensureMesh();
+    S.camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } }, audio: false });
+    var v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = S.camStream; await v.play(); S.video = v;
+    S.camLoop = true; setStatus('Câmera ligada'); setHint('Peça ao paciente: repouso, "M", "E", "F/V" e sorriso. Capture cada momento.');
+    camTick();
+  } catch (e) { setStatus('Câmera indisponível'); setHint('Não foi possível usar a câmera: ' + e.message + '. Use vídeo ou fotos.'); }
+}
+async function camTick() {
+  if (!S.camLoop) return;
+  if (!S.camBusy && S.video && S.video.readyState >= 2) {
+    S.camBusy = true;
+    try { var d = drawSource(S.video), lm = await detect(work); if (lm) { var meas = await measureCurrent(d.W, d.H, lm); S.curMeas = meas; showOnView(meas, false); setStatus('Abertura ' + fmt(meas.m.gap, 1) + ' mm | largura ' + fmt(meas.m.innerW, 1) + ' mm'); } else setStatus('Rosto não encontrado'); } catch (e) {}
+    S.camBusy = false;
+  }
+  setTimeout(camTick, 60);
+}
+function camStop() { S.camLoop = false; if (S.camStream) S.camStream.getTracks().forEach(function (t) { t.stop(); }); S.camStream = null; setStatus('Câmera desligada'); }
+function camCapture(label) {
+  if (!S.curMeas) { setHint('Nenhum rosto detectado agora.'); return; }
+  // Refaz a medição completa com a máscara de dentes sobre o quadro atual
+  var meas = S.curMeas; storeKey(label, meas); setHint('Quadro "' + label + '" capturado.');
+}
+
+function setSrc(s) {
+  S.src = s; if (s !== 'cam' && S.camLoop) camStop();
+  [['video', 'srcVideo', 'boxVideo'], ['photo', 'srcPhoto', 'boxPhoto'], ['cam', 'srcCam', 'boxCam']].forEach(function (r) { $(r[1]).setAttribute('aria-pressed', r[0] === s); $(r[2]).hidden = r[0] !== s; });
+  $('tlBox').hidden = !(s === 'video' && S.samples.length);
+}
+function init() {
+  $('srcVideo').onclick = function () { setSrc('video'); }; $('srcPhoto').onclick = function () { setSrc('photo'); }; $('srcCam').onclick = function () { setSrc('cam'); }; if (!HAS_CAM) $('srcCam').hidden = true;
+  $('fileVideo').onchange = function (e) { if (e.target.files[0]) loadVideo(e.target.files[0]); };
+  $('filePhotoRest').onchange = function (e) { if (e.target.files[0]) loadPhoto(e.target.files[0], 'repouso'); };
+  $('filePhotoSmile').onchange = function (e) { if (e.target.files[0]) loadPhoto(e.target.files[0], 'sorriso máximo'); };
+  $('camStart').onclick = camStart; $('camStop').onclick = camStop;
+  [].forEach.call($('camCap').querySelectorAll('button'), function (b) { b.onclick = function () { camCapture(b.getAttribute('data-cap')); }; });
+  [].forEach.call($('markRow').querySelectorAll('button'), function (b) { b.onclick = function () { if (S.cur >= 0) { var l = b.getAttribute('data-mark'); markIndex(S.cur, l).then(function () { drawTimeline(); }); } }; });
+  $('scrub').oninput = function () { gotoIndex(+$('scrub').value); };
+  $('btnCopy').onclick = function () { var b = $('csvBox'); b.value = summaryText(); b.hidden = false; b.select(); try { document.execCommand('copy'); } catch (e) {} if (navigator.clipboard) navigator.clipboard.writeText(b.value).catch(function () {}); };
+  $('btnCsv').onclick = function () { var b = $('csvBox'); b.value = csvText(); b.hidden = false; b.select(); try { document.execCommand('copy'); } catch (e) {} if (navigator.clipboard) navigator.clipboard.writeText(b.value).catch(function () {}); };
+  if (CAN_DOWNLOAD) { var b = $('btnPng'); b.hidden = false; b.onclick = function () { var a = document.createElement('a'); a.href = $('repImg').src; a.download = 'analise-sorriso.png'; document.body.appendChild(a); a.click(); a.remove(); }; }
+  var v = $('view'); v.getContext('2d').fillStyle = '#222'; v.getContext('2d').fillRect(0, 0, v.width, v.height);
+}
+init();
+
+})();
+</script>
+</body>
+</html>
