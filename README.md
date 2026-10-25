@@ -1,5 +1,7 @@
 # Analisador do Sorriso em Movimento (analisador-sorriso-movimento)
 
+Abrir no navegador: [mborille.github.io/analisador-sorriso-movimento/analisador-sorriso-movimento.html](https://mborille.github.io/analisador-sorriso-movimento/analisador-sorriso-movimento.html)
+
 Analisa um vídeo curto (ou duas fotos) do paciente e mede, no navegador, a abertura interlabial, a largura da boca, o índice do sorriso, a exposição dos dentes, o corredor bucal, a gengiva visível no centro e o arco do sorriso. O app encontra os lábios quadro a quadro, sugere o quadro de repouso e o de sorriso máximo, e deixa marcar quadros de fala (som E, som F/V).
 
 ## Arquivos
